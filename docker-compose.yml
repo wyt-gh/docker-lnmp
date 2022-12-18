@@ -1,0 +1,58 @@
+version: '3'
+
+services:
+  php-fpm:
+    container_name: "php-fpm"
+#    image: php:7.4-fpm # 可以直接用php镜像，但是出来可能缺东西，而且环境也不完整
+    build: ./etc/php/${PHP_VERSION} # 使用定制php镜像,这个目录放上我们刚才做好的定制化php的Dockerfile
+    ports:
+      - "9000:9000" # fpm 端口
+    restart: always
+    volumes:
+      - ./etc/php/${PHP_VERSION}/php/php.ini:/usr/local/etc/php/php.ini # 映射配置文件
+      - ./etc/php/${PHP_VERSION}/php-fpm.conf:/usr/local/etc/php-fpm.conf # 映射配置文件
+      - ./logs/php/${PHP_VERSION}:/var/log/php # 日志文件映射
+#     内部逻辑：这个必须加，因为nginx将请求转发给php后，实际上是php去执行了脚本解析
+      - ./www:/www # 项目目录，我所有的php项目都在www下面，只要去增加nginx配置就可以了，很方便。
+    links:
+      - mysql:mysql # 链接mysql服务
+      - redis:redis # 链接redis服务
+
+  nginx:
+    container_name: "nginx"
+    build: ./etc/nginx # 也可以定制哟
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - php-fpm # nginx必须依赖php的，所以要用depends_on
+    links:
+      - php-fpm:php-fpm # 链接php
+    volumes:
+      - ./www:/www:rw
+      - ./etc/nginx/conf.d:/etc/nginx/conf.d # 子配置文件
+      - ./etc/nginx/nginx.conf:/etc/nginx/nginx.conf # 主配置文件
+      - ./logs/nginx:/var/log/nginx/ # 日志
+
+  mysql:
+      container_name: "mysql"
+      build: ./etc/mysql
+      ports:
+        - "3306:3306"
+      volumes:
+        - ./data/mysql:/var/lib/mysql # 数据目录
+        - ./etc/mysql/my.cnf:/etc/mysql/conf.d/my.cnf # 配置文件
+        - ./logs/mysql:/data/mysql/logs # 日志
+      restart: always
+
+  redis:
+    container_name: redis
+    build: ./etc/redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./etc/redis/redis.conf:/etc/redis # 配置文件
+      - ./data/redis:/data # 数据目录
+      - ./logs/redis:/var/log #日志
